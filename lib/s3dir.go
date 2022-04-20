@@ -2,37 +2,34 @@ package lib
 
 import (
 	"context"
-	"log"
 	"mime"
 	"os"
 	"path"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"golang.org/x/net/webdav"
 )
 
 // S3 with minio sdk
-type S3conf struct {
-	Endpoint        string // endpoint := "play.min.io"
-	AccessKeyID     string // accessKeyID := "Q3AM3UQ867SPQQA43P2F"
-	SecretAccessKey string // secretAccessKey := "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
-	UseSSL          bool   // useSSL := true
-	Bucket          string
-}
+// type S3conf struct {
+// 	Endpoint        string // endpoint := "play.min.io"
+// 	AccessKeyID     string // accessKeyID := "Q3AM3UQ867SPQQA43P2F"
+// 	SecretAccessKey string // secretAccessKey := "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
+// 	UseSSL          bool   // useSSL := true
+// 	Bucket          string
+// }
 
-// TODO: fake file info, replace with all os.FileInfo and WebDavFile
-func S3(conf S3conf) {
-	minioClient, err := minio.New(conf.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(conf.AccessKeyID, conf.SecretAccessKey, ""),
-		Secure: conf.UseSSL,
-	})
-	if err != nil {
-		log.Fatalln(err)
-	}
+// // TODO: fake file info, replace with all os.FileInfo and WebDavFile
+// func S3(conf S3conf) {
+// 	minioClient, err := minio.New(conf.Endpoint, &minio.Options{
+// 		Creds:  credentials.NewStaticV4(conf.AccessKeyID, conf.SecretAccessKey, ""),
+// 		Secure: conf.UseSSL,
+// 	})
+// 	if err != nil {
+// 		log.Fatalln(err)
+// 	}
 
-	log.Printf("%#v\n", minioClient)
-}
+// 	log.Printf("%#v\n", minioClient)
+// }
 
 // NoSniffFileInfo wraps any generic FileInfo interface and bypasses mime type sniffing.
 type NoSniffFileInfo struct {
