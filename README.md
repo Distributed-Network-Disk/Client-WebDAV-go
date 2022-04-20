@@ -2,6 +2,8 @@
 
 Golang version, for my unskilled python.
 
+run `./Client-WebDAV-go -p 80 --auth=false` and open <http://localhost:80/> in explorer.
+
 ## License
 
 Apache License 2.0
