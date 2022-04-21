@@ -13,7 +13,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/totoval/framework/helpers/hash"
+
+	// "github.com/totoval/framework/helpers/hash"
 
 	"golang.org/x/net/webdav"
 )
@@ -54,9 +55,13 @@ func (minfo *miniofileInfo) Sys() interface{} {
 	return nil
 } //any
 
-// S3
+// S3 TODO: fake file info, replace with all os.FileInfo and WebDavFile
 
-type S3conf struct {
+func NewFS(endpoint, accessKeyID, secretAccessKey string, useSSL bool, bucketName, location string) webdav.FileSystem {
+	return S3New(endpoint, accessKeyID, secretAccessKey, useSSL, bucketName, location)
+}
+
+type S3confFS struct {
 	Endpoint        string // endpoint := "play.min.io"
 	AccessKeyID     string // accessKeyID := "Q3AM3UQ867SPQQA43P2F"
 	SecretAccessKey string // secretAccessKey := "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
@@ -69,8 +74,8 @@ type S3conf struct {
 	uploadTmpPath   string
 }
 
-func S3New(endpoint, accessKeyID, secretAccessKey string, useSSL bool, bucketName, location string) *S3conf {
-	m := &S3conf{
+func S3New(endpoint, accessKeyID, secretAccessKey string, useSSL bool, bucketName, location string) *S3confFS {
+	m := &S3confFS{
 		Endpoint:        endpoint,
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secretAccessKey,
@@ -115,7 +120,8 @@ func clearName(name string) (string, error) {
 	}
 	return name, nil
 }
-func (m *S3conf) MkBucket() (err error) {
+
+func (m *S3confFS) MkBucket() (err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -139,14 +145,17 @@ func (m *S3conf) MkBucket() (err error) {
 	log.Println("Successfully created bucket:", m.Bucket)
 	return nil
 }
-func (m *S3conf) Mkdir(name string, perm os.FileMode) error {
+
+func (m *S3confFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
+	log.Println("Mkdir:", name)
+
 	name, err := clearName(name)
 	if err != nil {
 		return err
 	}
 
 	fileBytes := bytes.NewBuffer([]byte{})
-	uploadInfo, err := m.Client.PutObject(context.Background(), m.Bucket, strings.TrimPrefix(path.Join(name, KEEP_FILE_NAME), "/"), bytes.NewBuffer([]byte{}), int64(fileBytes.Len()), minio.PutObjectOptions{ContentType: KEEP_FILE_CONTENT_TYPE})
+	uploadInfo, err := m.Client.PutObject(ctx, m.Bucket, strings.TrimPrefix(path.Join(name, KEEP_FILE_NAME), "/"), bytes.NewBuffer([]byte{}), int64(fileBytes.Len()), minio.PutObjectOptions{ContentType: KEEP_FILE_CONTENT_TYPE})
 	if err != nil {
 		log.Println(err, "op: mkdir", "name:", path.Join(name, KEEP_FILE_NAME))
 		return err
@@ -155,7 +164,17 @@ func (m *S3conf) Mkdir(name string, perm os.FileMode) error {
 	log.Println("mkdir success, name:", name)
 	return nil
 }
-func (m *S3conf) OpenFile(name string, flag int, perm os.FileMode) (webdav.File, error) {
+
+func (m *S3confFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+	log.Println("OpenFile", "name:", name, "flag", flag, "perm", perm)
+
+	// what's clearName??
+	// test1, _ := clearName("/a/")
+	// log.Println("clearName(\"/a/\")", test1)
+	// test2, _ := clearName("/aaa")
+	// log.Println("clearName(\"/aaa\")", test2)
+	// test3, _ := clearName("/aaa/a")
+	// log.Println("clearName(\"/aaa/a\")", test3)
 
 	name, err := clearName(name)
 	if err != nil {
@@ -163,13 +182,13 @@ func (m *S3conf) OpenFile(name string, flag int, perm os.FileMode) (webdav.File,
 	}
 
 	log.Println("minio openfile, Name:", name)
-
+	// TODO: why no proceed here??, m.rootFile
 	if len(name) == 0 {
 		return m.rootFile, nil
 	}
 
 	// file
-	object, err := m.Client.GetObject(context.Background(), m.Bucket, strings.TrimPrefix(name, "/"), minio.GetObjectOptions{})
+	object, err := m.Client.GetObject(ctx, m.Bucket, strings.TrimPrefix(name, "/"), minio.GetObjectOptions{})
 	log.Println("open file, name:", name)
 	if err != nil {
 		return nil, err
@@ -177,7 +196,9 @@ func (m *S3conf) OpenFile(name string, flag int, perm os.FileMode) (webdav.File,
 
 	return &file{m, object, name}, nil
 }
-func (m *S3conf) RemoveAll(name string) error {
+
+func (m *S3confFS) RemoveAll(ctx context.Context, name string) error {
+	log.Println("RemoveAll", name)
 
 	name, err := clearName(name)
 	if err != nil {
@@ -191,7 +212,7 @@ func (m *S3conf) RemoveAll(name string) error {
 	go func() {
 		defer close(objectsCh)
 		// List all objects from a bucket-name with a matching prefix.
-		for object := range m.Client.ListObjects(context.Background(), m.Bucket, minio.ListObjectsOptions{Prefix: name, Recursive: true}) {
+		for object := range m.Client.ListObjects(ctx, m.Bucket, minio.ListObjectsOptions{Prefix: name, Recursive: true}) {
 			if object.Err != nil {
 				log.Println(object.Err, "op: removeAll, name:", name)
 			}
@@ -199,7 +220,7 @@ func (m *S3conf) RemoveAll(name string) error {
 		}
 	}()
 
-	for rErr := range m.Client.RemoveObjects(context.Background(), m.Bucket, objectsCh, minio.RemoveObjectsOptions{GovernanceBypass: true}) {
+	for rErr := range m.Client.RemoveObjects(ctx, m.Bucket, objectsCh, minio.RemoveObjectsOptions{GovernanceBypass: true}) {
 		log.Println("Error detected during deletion: ", rErr)
 
 		if rErr.Err != nil {
@@ -210,9 +231,10 @@ func (m *S3conf) RemoveAll(name string) error {
 	}
 
 	// deleteCacheIsDir(name)
-	return m.Client.RemoveObject(context.Background(), m.Bucket, name, minio.RemoveObjectOptions{})
+	return m.Client.RemoveObject(ctx, m.Bucket, name, minio.RemoveObjectOptions{})
 }
-func (m *S3conf) Rename(oldName, newName string) error {
+
+func (m *S3confFS) Rename(ctx context.Context, oldName, newName string) error {
 
 	oldParentName, err := clearName(oldName)
 	if err != nil {
@@ -226,15 +248,17 @@ func (m *S3conf) Rename(oldName, newName string) error {
 	log.Println("minio rename, Old:", oldName, "New:", newName, "oldParentName:", oldParentName, "newParentName:", newParentName)
 
 	//newName = strings.Replace(newName, path.Dir(oldName), "", 1)
-	err = m.WalkDir(oldParentName, newParentName, oldName)
+	err = m.WalkDir(ctx, oldParentName, newParentName, oldName)
 	if err != nil {
 		return err
 	}
 
 	// return nil // for test
-	return m.RemoveAll(oldName)
+	return m.RemoveAll(ctx, oldName)
 }
-func (m *S3conf) Stat(name string) (os.FileInfo, error) {
+
+func (m *S3confFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
+	log.Println("Stat", "name:", name)
 
 	name, err := clearName(name)
 	if err != nil {
@@ -277,7 +301,8 @@ func (m *S3conf) Stat(name string) (os.FileInfo, error) {
 	}
 	return &miniofileInfo{stat}, nil
 }
-func (m *S3conf) WalkDir(oldParentName, newParentName, oldName string) error {
+func (m *S3confFS) WalkDir(ctx context.Context, oldParentName, newParentName, oldName string) error {
+	log.Println("walk dir, oldParentName:", oldParentName, "newParentName:", newParentName, "oldName:", oldName)
 
 	oldNameTrim := strings.Trim(oldName, "/")
 	newName := newParentName
@@ -302,7 +327,7 @@ func (m *S3conf) WalkDir(oldParentName, newParentName, oldName string) error {
 	}
 
 	// is dir, then readdir
-	minioObj, err := m.OpenFile(oldName, 0, 777)
+	minioObj, err := m.OpenFile(ctx, oldName, 0, 777)
 	if err != nil {
 		log.Println(err, "op: OpenFile, old:", oldName, "new:", newName)
 		return err
@@ -313,13 +338,15 @@ func (m *S3conf) WalkDir(oldParentName, newParentName, oldName string) error {
 	}
 	for _, child := range oldFileDirChildren {
 		log.Println("walkDir oldFileDirChildren, op: walkDir", "oldName:", oldName, "child:", child.Name(), "len:", len(oldFileDirChildren))
-		if err := m.WalkDir(oldName, newName, path.Join(oldName, child.Name())); err != nil {
+		if err := m.WalkDir(ctx, oldName, newName, path.Join(oldName, child.Name())); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-func (m *S3conf) isDir(name string) bool {
+func (m *S3confFS) isDir(name string) bool {
+	log.Println("isDir", name)
+
 	if !strings.HasSuffix(name, "/") {
 		name = name + "/"
 	}
@@ -385,68 +412,68 @@ func isDirCacheKey(name string) string {
 }
 
 type file struct {
-	m *S3conf
+	m *S3confFS
 	*minio.Object
 	name string
 }
 
 func (mo *file) Stat() (os.FileInfo, error) {
 	log.Println("file stat, name:", mo.name)
-	return mo.m.Stat(mo.name)
+	return mo.m.Stat(context.Background(), mo.name)
 }
 
 func (mo *file) ReadFrom(r io.Reader) (n int64, err error) {
-	// // memory mode
-	// if config.GetBool("webdav.memory_upload_mode") {
-	// 	n, err = mo.m.Client.PutObject(ctx, mo.m.bucketName, strings.TrimPrefix(mo.name, "/"), r, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
-	// 	if err != nil {
-	// 		log.Println(err, "op: ReadFrom, name:", mo.name)
-	// 		return 0, err
-	// 	}
-	// 	fmt.Println("Successfully uploaded bytes: ", n)
-	// 	return n, nil
-	// }
+	log.Println("file read from, name:", mo.name)
 
-	// file mode
-	tmpFilePath := path.Join(mo.m.uploadTmpPath, hash.Md5(mo.name))
-	f, err := os.Create(tmpFilePath)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-	defer func(p string) {
-		err = os.RemoveAll(p)
-		if err != nil {
-			log.Println(err, "op: upload, name:", mo.name, "tempName,", p)
-		}
-	}(tmpFilePath)
-
-	buf := make([]byte, 1024)
-	for {
-		// read a chunk
-		n, err := r.Read(buf)
-		if err != nil && err != io.EOF {
-			return 0, err
-		}
-		if n == 0 {
-			break
-		}
-
-		// write a chunk
-		if _, err := f.Write(buf[:n]); err != nil {
-			return 0, err
-		}
-	}
-	uploadInfo, err := mo.m.Client.FPutObject(context.Background(), mo.m.Bucket, strings.TrimPrefix(mo.name, "/"), tmpFilePath, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	// memory mode
+	uploadInfo, err := mo.m.Client.PutObject(context.Background(), mo.m.Bucket, strings.TrimPrefix(mo.name, "/"), r, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 	if err != nil {
 		log.Println(err, "op: ReadFrom, name:", mo.name)
 		return 0, err
 	}
-	log.Println("Successfully uploaded object: ", uploadInfo) // TODO
-	log.Println(hash.Md5(mo.name), "op: upload, name:", mo.name)
-
-	fmt.Println("Successfully uploaded bytes: ", n)
+	log.Println("Successfully uploaded bytes: ", uploadInfo)
 	return n, nil
+
+	// // file mode
+	// tmpFilePath := path.Join(mo.m.uploadTmpPath, hash.Md5(mo.name))
+	// f, err := os.Create(tmpFilePath)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// defer f.Close()
+	// defer func(p string) {
+	// 	err = os.RemoveAll(p)
+	// 	if err != nil {
+	// 		log.Println(err, "op: upload, name:", mo.name, "tempName,", p)
+	// 	}
+	// }(tmpFilePath)
+
+	// buf := make([]byte, 1024)
+	// for {
+	// 	// read a chunk
+	// 	n, err := r.Read(buf)
+	// 	if err != nil && err != io.EOF {
+	// 		return 0, err
+	// 	}
+	// 	if n == 0 {
+	// 		break
+	// 	}
+
+	// 	// write a chunk
+	// 	if _, err := f.Write(buf[:n]); err != nil {
+	// 		return 0, err
+	// 	}
+	// }
+	// uploadInfo, err := mo.m.Client.FPutObject(context.Background(), mo.m.Bucket, strings.TrimPrefix(mo.name, "/"), tmpFilePath, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	// if err != nil {
+	// 	log.Println(err, "op: ReadFrom, name:", mo.name)
+	// 	return 0, err
+	// }
+	// log.Println("Successfully uploaded object: ", uploadInfo) // TODO
+	// log.Println(hash.Md5(mo.name), "op: upload, name:", mo.name)
+
+	// fmt.Println("Successfully uploaded bytes: ", n)
+	// return n, nil
 }
 
 func (mo *file) Write(p []byte) (n int, err error) {

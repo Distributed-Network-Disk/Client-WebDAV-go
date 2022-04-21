@@ -121,13 +121,13 @@ func parseUsers(raw []interface{}, c *lib.Config) {
 			if rules, ok := u["rules"].([]interface{}); ok {
 				user.Rules = append(c.User.Rules, parseRules(rules, user.Modify)...)
 			}
-
 			user.Handler = &webdav.Handler{
-				Prefix: c.User.Handler.Prefix,
-				FileSystem: lib.WebDavDir{
-					Dir:     webdav.Dir(user.Scope),
-					NoSniff: c.NoSniff,
-				},
+				Prefix:     c.User.Handler.Prefix,
+				FileSystem: lib.NewFS("206.yyw.moe:9000/", "totorominio", "totorominio123", false, "mybucket", ""),
+				// FileSystem: lib.WebDavDir{
+				// 	Dir:     webdav.Dir(user.Scope),
+				// 	NoSniff: c.NoSniff,
+				// },
 				LockSystem: webdav.NewMemLS(),
 			}
 
@@ -183,11 +183,12 @@ func readConfig(flags *pflag.FlagSet) *lib.Config {
 			Modify: getOptB(flags, "modify"),
 			Rules:  []*lib.Rule{},
 			Handler: &webdav.Handler{
-				Prefix: getOpt(flags, "prefix"),
-				FileSystem: lib.WebDavDir{
-					Dir:     webdav.Dir(getOpt(flags, "scope")),
-					NoSniff: getOptB(flags, "nosniff"),
-				},
+				Prefix:     getOpt(flags, "prefix"),
+				FileSystem: lib.NewFS("206.yyw.moe:9000/", "totorominio", "totorominio123", false, "mybucket", ""),
+				// FileSystem: lib.WebDavDir{
+				// 	Dir:     webdav.Dir(getOpt(flags, "scope")),
+				// 	NoSniff: getOptB(flags, "nosniff"),
+				// },
 				LockSystem: webdav.NewMemLS(),
 			},
 		},
