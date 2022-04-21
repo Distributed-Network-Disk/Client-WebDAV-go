@@ -107,7 +107,7 @@ func S3New(endpoint, accessKeyID, secretAccessKey string, useSSL bool, bucketNam
 	return m
 }
 func clearName(name string) (string, error) {
-	if name == "/" {
+	if name == "/" || name == "" {
 		return "", nil
 	}
 	slashed := strings.HasSuffix(name, "/")
@@ -177,6 +177,7 @@ func (m *S3confFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 	// log.Println("clearName(\"/aaa/a\")", test3)
 
 	name, err := clearName(name)
+	log.Println("openfile after clearName, Name:", name, "err:", err)
 	if err != nil {
 		return nil, err
 	}
@@ -261,6 +262,7 @@ func (m *S3confFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	log.Println("Stat", "name:", name)
 
 	name, err := clearName(name)
+	log.Println("stat after clearName, Name:", name, "err:", err)
 	if err != nil {
 		return nil, err
 	}
@@ -499,7 +501,7 @@ func (mo *file) Readdir(count int) (fileInfoList []os.FileInfo, err error) {
 	for object := range mo.m.Client.ListObjects(context.Background(), mo.m.Bucket, minio.ListObjectsOptions{Prefix: name, Recursive: true}) {
 		err = object.Err
 		if err != nil {
-			fmt.Println(object.Err)
+			log.Println(object.Err)
 			// return
 			break
 		}
