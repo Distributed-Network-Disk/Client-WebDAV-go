@@ -69,11 +69,11 @@ func (minfo *miniofileInfo) Sys() interface{} {
 
 // S3 TODO: fake file info, replace with all os.FileInfo and WebDavFile
 
-func NewFS(endpoint, accessKeyID, secretAccessKey string, useSSL bool, bucketName, location string) webdav.FileSystem {
-	return S3New(endpoint, accessKeyID, secretAccessKey, useSSL, bucketName, location)
+func NewFS(conf []S3conf) webdav.FileSystem {
+	return S3New(conf)
 }
 
-type S3confFS struct {
+type S3conf struct {
 	Endpoint        string // endpoint := "play.min.io"
 	AccessKeyID     string // accessKeyID := "Q3AM3UQ867SPQQA43P2F"
 	SecretAccessKey string // secretAccessKey := "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
@@ -81,20 +81,18 @@ type S3confFS struct {
 	Location        string
 	Client          *minio.Client
 	Bucket          string
-	rootInfo        *miniofileInfo
-	rootFile        *file
-	uploadTmpPath   string
+}
+type S3confFS struct {
+	servers       []S3conf
+	rootInfo      *miniofileInfo
+	rootFile      *file
+	uploadTmpPath string
 }
 
-func S3New(endpoint, accessKeyID, secretAccessKey string, useSSL bool, bucketName, location string) *S3confFS {
+func S3New(conf []S3conf) *S3confFS {
 	m := &S3confFS{
-		Endpoint:        endpoint,
-		AccessKeyID:     accessKeyID,
-		SecretAccessKey: secretAccessKey,
-		UseSSL:          useSSL,
-		Bucket:          bucketName,
-		Location:        location,
-		uploadTmpPath:   ".",
+		servers:       conf,
+		uploadTmpPath: ".",
 		rootInfo: &miniofileInfo{minio.ObjectInfo{
 			Key:          "/",
 			Size:         0,
@@ -211,7 +209,7 @@ func (m *S3confFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 	if err != nil {
 		return nil, err
 	}
-
+	log.Println("open name: ", name, "success")
 	return &file{m, object, name}, nil
 }
 
