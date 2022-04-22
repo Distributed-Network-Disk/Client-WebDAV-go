@@ -29,14 +29,48 @@ type miniofileInfo struct {
 }
 
 func (minfo *miniofileInfo) Name() string {
+	log.Println("***************")
+	log.Println("Processing name")
 	name := minfo.ObjectInfo.Key
+	log.Println("name = " + name)
 	name = strings.Trim(name, "/")
+	log.Println("Trimmed to: " + name)
+
 	if strings.Contains(name, "/") {
-		name = path.Clean(strings.Replace(name, path.Dir(name), "", 1))
+		log.Println("string contains /")
 	}
+	// if strings.Contains(name, "/") {
+	// 	log.Println("Dir name: " + path.Dir(name))
+	// 	log.Println("Replace name: " + name + " to: " + strings.Replace(name, path.Dir(name), "", 1))
+	// 	name = path.Clean(strings.Replace(name, path.Dir(name), "", 1))
+	// 	log.Println("Cleaned to: " + name)
+	// }
 	log.Println("Key:", minfo.ObjectInfo.Key, "ObjectName:", name)
+	log.Println("######end######")
 	return name
-} // base name of the file
+} // base name of the file !! TODO temply including dir name!
+func (minfo *miniofileInfo) Pathname() string {
+	log.Println("***************")
+	log.Println("Path name")
+	name := minfo.ObjectInfo.Key
+	log.Println("name = " + name)
+	name = strings.Trim(name, "/")
+	log.Println("Trimmed to: " + name)
+
+	if strings.Contains(name, "/") {
+		log.Println("string contains /")
+	}
+	// !! TODO temp commit
+	//	if strings.Contains(name, "/") {
+	//		log.Println("Dir name: " + path.Dir(name))
+	//		log.Println("Replace name: " + name + " to: " + strings.Replace(name, path.Dir(name), "", 1))
+	//		name = path.Clean(strings.Replace(name, path.Dir(name), "", 1))
+	//		log.Println("Cleaned to: " + name)
+	//	}
+	log.Println("Key:", minfo.ObjectInfo.Key, "ObjectName:", name)
+	log.Println("######end######")
+	return name
+} // base name of the file !! TODO temply including dir name!
 func (minfo *miniofileInfo) Size() int64 {
 	return minfo.ObjectInfo.Size
 } // length in bytes for regular files; system-dependent for others
@@ -107,17 +141,22 @@ func S3New(endpoint, accessKeyID, secretAccessKey string, useSSL bool, bucketNam
 	return m
 }
 func clearName(name string) (string, error) {
+	// 在某些文件系统中，可能有整理路径名的需求，这个函数可能是用于此种用途
+	log.Println("enter clearname, name = " + name)
 	if name == "/" || name == "" {
 		return "", nil
 	}
 	slashed := strings.HasSuffix(name, "/")
 	name = path.Clean(name)
+	log.Println("Cleaned name = " + name)
 	if !strings.HasSuffix(name, "/") && slashed {
 		name += "/"
 	}
-	if !strings.HasPrefix(name, "/") {
-		return "", os.ErrInvalid
-	}
+	// !! TODO Remember to uncommit following code
+	//if !strings.HasPrefix(name, "/") {
+	//	return "", os.ErrInvalid
+	//}
+	log.Println("Clean name success, return name = " + name)
 	return name, nil
 }
 
@@ -273,13 +312,15 @@ func (m *S3confFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 		return m.rootInfo, nil
 	}
 
+	log.Println("trying to get minio obj, from Bucket:" + m.Bucket + " name: " + name)
 	stat, err := m.Client.StatObject(context.Background(), m.Bucket, name, minio.StatObjectOptions{})
 	if err != nil {
 		if _err, ok := err.(minio.ErrorResponse); ok {
 			if _err.Code == "NoSuchKey" {
-				// check is dir
+				// check if is a dir
 				if !m.isDir(name) {
 					// not exist
+					log.Println("m is not a dir, exit")
 					return nil, os.ErrNotExist
 				}
 
@@ -347,6 +388,7 @@ func (m *S3confFS) WalkDir(ctx context.Context, oldParentName, newParentName, ol
 	return nil
 }
 func (m *S3confFS) isDir(name string) bool {
+	// check if obj is a directory
 	log.Println("isDir", name)
 
 	if !strings.HasSuffix(name, "/") {
@@ -371,15 +413,17 @@ func (m *S3confFS) isDir(name string) bool {
 	log.Println("isDir, name:", name, "childrenCount:", childrenCount)
 
 	if childrenCount <= 0 {
-		// not dir, not exist
-
+		// not dir, not exist, or empty dir
+		log.Println("Enter ChildrenCount, double checking hidden file")
 		//double check dir, if it contains hidden .mindavkeep file
 		_, err := m.Client.StatObject(context.Background(), m.Bucket, path.Join(name, KEEP_FILE_NAME), minio.StatObjectOptions{})
 		if err != nil {
+			log.Println("obj is not a dir, exit")
 			// not dir or not exist
 			// return cacheIsDir(name, false)
 			return false
 		}
+		log.Println("Has a hidden file")
 		return true
 
 		// empty dir
