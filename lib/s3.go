@@ -39,34 +39,12 @@ func (minfo *miniofileInfo) Name() string {
 	if strings.Contains(name, "/") {
 		log.Println("string contains /")
 	}
-	// if strings.Contains(name, "/") {
-	// 	log.Println("Dir name: " + path.Dir(name))
-	// 	log.Println("Replace name: " + name + " to: " + strings.Replace(name, path.Dir(name), "", 1))
-	// 	name = path.Clean(strings.Replace(name, path.Dir(name), "", 1))
-	// 	log.Println("Cleaned to: " + name)
-	// }
-	log.Println("Key:", minfo.ObjectInfo.Key, "ObjectName:", name)
-	log.Println("######end######")
-	return name
-} // base name of the file !! TODO temply including dir name!
-func (minfo *miniofileInfo) Pathname() string {
-	log.Println("***************")
-	log.Println("Path name")
-	name := minfo.ObjectInfo.Key
-	log.Println("name = " + name)
-	name = strings.Trim(name, "/")
-	log.Println("Trimmed to: " + name)
-
 	if strings.Contains(name, "/") {
-		log.Println("string contains /")
+		log.Println("Dir name: " + path.Dir(name))
+		log.Println("Replace name: " + name + " to: " + strings.Replace(name, path.Dir(name), "", 1))
+		name = path.Clean(strings.Replace(name, path.Dir(name), "", 1))
+		log.Println("Cleaned to: " + name)
 	}
-	// !! TODO temp commit
-	//	if strings.Contains(name, "/") {
-	//		log.Println("Dir name: " + path.Dir(name))
-	//		log.Println("Replace name: " + name + " to: " + strings.Replace(name, path.Dir(name), "", 1))
-	//		name = path.Clean(strings.Replace(name, path.Dir(name), "", 1))
-	//		log.Println("Cleaned to: " + name)
-	//	}
 	log.Println("Key:", minfo.ObjectInfo.Key, "ObjectName:", name)
 	log.Println("######end######")
 	return name
@@ -542,7 +520,7 @@ func (mo *file) Readdir(count int) (fileInfoList []os.FileInfo, err error) {
 	}
 
 	// List all objects from a bucket-name with a matching prefix.
-	for object := range mo.m.Client.ListObjects(context.Background(), mo.m.Bucket, minio.ListObjectsOptions{Prefix: name, Recursive: true}) {
+	for object := range mo.m.Client.ListObjects(context.Background(), mo.m.Bucket, minio.ListObjectsOptions{Prefix: name, Recursive: false}) {
 		err = object.Err
 		if err != nil {
 			log.Println(object.Err)
