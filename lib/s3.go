@@ -12,7 +12,6 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/totoval/framework/helpers/hash"
 
 	// "github.com/totoval/framework/helpers/hash"
 
@@ -449,55 +448,55 @@ func (mo *file) Stat() (os.FileInfo, error) {
 func (mo *file) ReadFrom(r io.Reader) (n int64, err error) {
 	log.Println("file read from, name:", mo.name)
 
-	// // memory mode
-	// uploadInfo, err := mo.m.Client.PutObject(context.Background(), mo.m.Bucket, strings.TrimPrefix(mo.name, "/"), r, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
-	// if err != nil {
-	// 	log.Println(err, "op: ReadFrom, name:", mo.name)
-	// 	return 0, err
-	// }
-	// log.Println("Successfully uploaded bytes: ", uploadInfo)
-	// return n, nil
-
-	// file mode
-	tmpFilePath := path.Join(mo.m.uploadTmpPath, hash.Md5(mo.name))
-	f, err := os.Create(tmpFilePath)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-	defer func(p string) {
-		err = os.RemoveAll(p)
-		if err != nil {
-			log.Println(err, "op: upload, name:", mo.name, "tempName,", p)
-		}
-	}(tmpFilePath)
-
-	buf := make([]byte, 1024)
-	for {
-		// read a chunk
-		n, err := r.Read(buf)
-		if err != nil && err != io.EOF {
-			return 0, err
-		}
-		if n == 0 {
-			break
-		}
-
-		// write a chunk
-		if _, err := f.Write(buf[:n]); err != nil {
-			return 0, err
-		}
-	}
-	uploadInfo, err := mo.m.Client.FPutObject(context.Background(), mo.m.Bucket, strings.TrimPrefix(mo.name, "/"), tmpFilePath, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	// memory mode
+	uploadInfo, err := mo.m.Client.PutObject(context.Background(), mo.m.Bucket, strings.TrimPrefix(mo.name, "/"), r, -1, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 	if err != nil {
 		log.Println(err, "op: ReadFrom, name:", mo.name)
 		return 0, err
 	}
-	log.Println("Successfully uploaded object: ", uploadInfo) // TODO
-	log.Println(hash.Md5(mo.name), "op: upload, name:", mo.name)
-
 	log.Println("Successfully uploaded bytes: ", uploadInfo.Size)
 	return uploadInfo.Size, nil
+
+	// // file mode
+	// tmpFilePath := path.Join(mo.m.uploadTmpPath, hash.Md5(mo.name))
+	// f, err := os.Create(tmpFilePath)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// defer f.Close()
+	// defer func(p string) {
+	// 	err = os.RemoveAll(p)
+	// 	if err != nil {
+	// 		log.Println(err, "op: upload, name:", mo.name, "tempName,", p)
+	// 	}
+	// }(tmpFilePath)
+
+	// buf := make([]byte, 1024)
+	// for {
+	// 	// read a chunk
+	// 	n, err := r.Read(buf)
+	// 	if err != nil && err != io.EOF {
+	// 		return 0, err
+	// 	}
+	// 	if n == 0 {
+	// 		break
+	// 	}
+
+	// 	// write a chunk
+	// 	if _, err := f.Write(buf[:n]); err != nil {
+	// 		return 0, err
+	// 	}
+	// }
+	// uploadInfo, err := mo.m.Client.FPutObject(context.Background(), mo.m.Bucket, strings.TrimPrefix(mo.name, "/"), tmpFilePath, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	// if err != nil {
+	// 	log.Println(err, "op: ReadFrom, name:", mo.name)
+	// 	return 0, err
+	// }
+	// log.Println("Successfully uploaded object: ", uploadInfo) // TODO
+	// log.Println(hash.Md5(mo.name), "op: upload, name:", mo.name)
+
+	// log.Println("Successfully uploaded bytes: ", uploadInfo.Size)
+	// return uploadInfo.Size, nil
 }
 
 func (mo *file) Write(p []byte) (n int, err error) {
