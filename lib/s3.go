@@ -41,8 +41,9 @@ func (minfo *miniofileInfo) Name() string {
 	}
 	if strings.Contains(name, "/") {
 		log.Println("Dir name: " + path.Dir(name))
-		log.Println("Replace name: " + name + " to: " + strings.Replace(name, path.Dir(name), "", 1))
-		name = path.Clean(strings.Replace(name, path.Dir(name), "", 1))
+		log.Println("Replace name: " + name + " to: " + path.Base(name))
+		// name = path.Clean(strings.Replace(name, path.Dir(name), "", 1))
+		name = path.Base(name)
 		log.Println("Cleaned to: " + name)
 	}
 	log.Println("Key:", minfo.ObjectInfo.Key, "ObjectName:", name)
@@ -367,7 +368,6 @@ func (m *S3confFS) WalkDir(ctx context.Context, oldParentName, newParentName, ol
 }
 func (m *S3confFS) isDir(name string) bool {
 	// check if obj is a directory
-	log.Println("isDir", name)
 
 	if !strings.HasSuffix(name, "/") {
 		name = name + "/"
