@@ -121,9 +121,15 @@ func parseUsers(raw []interface{}, c *lib.Config) {
 			if rules, ok := u["rules"].([]interface{}); ok {
 				user.Rules = append(c.User.Rules, parseRules(rules, user.Modify)...)
 			}
+			s3conf := make(map[string]lib.S3conf)
+			s3conf["1"] = lib.S3conf{Endpoint: "206.yyw.moe:9000/", AccessKeyID: "totorominio", SecretAccessKey: "totorominio123", UseSSL: false, Location: "", Client: nil, Bucket: "mybucket"}
+			s3conf["2"] = lib.S3conf{Endpoint: "206.yyw.moe:9002/", AccessKeyID: "totorominio", SecretAccessKey: "totorominio123", UseSSL: false, Location: "", Client: nil, Bucket: "mybucket"}
+			s3conf["3"] = lib.S3conf{Endpoint: "206.yyw.moe:9004/", AccessKeyID: "totorominio", SecretAccessKey: "totorominio123", UseSSL: false, Location: "", Client: nil, Bucket: "mybucket"}
+			s3conf["4"] = lib.S3conf{Endpoint: "206.yyw.moe:9006/", AccessKeyID: "totorominio", SecretAccessKey: "totorominio123", UseSSL: false, Location: "", Client: nil, Bucket: "mybucket"}
+
 			user.Handler = &webdav.Handler{
 				Prefix:     c.User.Handler.Prefix,
-				FileSystem: lib.NewFS("206.yyw.moe:9000/", "totorominio", "totorominio123", false, "mybucket", ""),
+				FileSystem: lib.NewFS(s3conf),
 				// FileSystem: lib.WebDavDir{
 				// 	Dir:     webdav.Dir(user.Scope),
 				// 	NoSniff: c.NoSniff,
@@ -177,6 +183,12 @@ func corsProperty(property string, cfg map[string]interface{}) []string {
 }
 
 func readConfig(flags *pflag.FlagSet) *lib.Config {
+	s3conf := make(map[string]lib.S3conf)
+	s3conf["1"] = lib.S3conf{Endpoint: "206.yyw.moe:9000/", AccessKeyID: "totorominio", SecretAccessKey: "totorominio123", UseSSL: false, Location: "", Client: nil, Bucket: "mybucket"}
+	s3conf["2"] = lib.S3conf{Endpoint: "206.yyw.moe:9002/", AccessKeyID: "totorominio", SecretAccessKey: "totorominio123", UseSSL: false, Location: "", Client: nil, Bucket: "mybucket"}
+	s3conf["3"] = lib.S3conf{Endpoint: "206.yyw.moe:9004/", AccessKeyID: "totorominio", SecretAccessKey: "totorominio123", UseSSL: false, Location: "", Client: nil, Bucket: "mybucket"}
+	s3conf["4"] = lib.S3conf{Endpoint: "206.yyw.moe:9006/", AccessKeyID: "totorominio", SecretAccessKey: "totorominio123", UseSSL: false, Location: "", Client: nil, Bucket: "mybucket"}
+
 	cfg := &lib.Config{
 		User: &lib.User{
 			Scope:  getOpt(flags, "scope"),
@@ -184,7 +196,7 @@ func readConfig(flags *pflag.FlagSet) *lib.Config {
 			Rules:  []*lib.Rule{},
 			Handler: &webdav.Handler{
 				Prefix:     getOpt(flags, "prefix"),
-				FileSystem: lib.NewFS("206.yyw.moe:9000/", "totorominio", "totorominio123", false, "mybucket", ""),
+				FileSystem: lib.NewFS(s3conf),
 				// FileSystem: lib.WebDavDir{
 				// 	Dir:     webdav.Dir(getOpt(flags, "scope")),
 				// 	NoSniff: getOptB(flags, "nosniff"),

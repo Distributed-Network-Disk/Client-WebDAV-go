@@ -69,7 +69,7 @@ func (minfo *miniofileInfo) Sys() interface{} {
 
 // S3 TODO: fake file info, replace with all os.FileInfo and WebDavFile
 
-func NewFS(conf []S3conf) webdav.FileSystem {
+func NewFS(conf map[string]S3conf) webdav.FileSystem {
 	return S3New(conf)
 }
 
@@ -83,13 +83,13 @@ type S3conf struct {
 	Bucket          string
 }
 type S3confFS struct {
-	servers       []S3conf
+	servers       map[string]S3conf
 	rootInfo      *miniofileInfo
 	rootFile      *file
 	uploadTmpPath string
 }
 
-func S3New(conf []S3conf) *S3confFS {
+func S3New(conf map[string]S3conf) *S3confFS {
 	m := &S3confFS{
 		servers:       conf,
 		uploadTmpPath: ".",
@@ -105,8 +105,11 @@ func S3New(conf []S3conf) *S3confFS {
 	m.rootFile = &file{m, nil, "/"}
 
 	var err error
-	if m.Client, err = minio.New(m.Endpoint, &minio.Options{Creds: credentials.NewStaticV4(m.AccessKeyID, m.SecretAccessKey, ""), Secure: m.UseSSL, Region: m.Location}); err != nil {
-		panic(err)
+	for index, server := range m.servers {
+		if server.Client, err = minio.New(server.Endpoint, &minio.Options{Creds: credentials.NewStaticV4(server.AccessKeyID, server.SecretAccessKey, ""), Secure: server.UseSSL, Region: server.Location}); err != nil {
+			log.Println("server index", index, "Error:", err)
+			panic(err)
+		}
 	}
 
 	err = m.MkBucket()
@@ -116,6 +119,7 @@ func S3New(conf []S3conf) *S3confFS {
 
 	return m
 }
+
 func clearName(name string) (string, error) {
 	// 在某些文件系统中，可能有整理路径名的需求，这个函数可能是用于此种用途
 	log.Println("enter clearname, name = " + name)
@@ -140,24 +144,26 @@ func (m *S3confFS) MkBucket() (err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	exists, err := m.Client.BucketExists(ctx, m.Bucket)
-	if err != nil {
-		log.Println(err, "op: mkbucket check")
-		return err
-	}
+	for index, server := range m.servers {
+		exists, err := server.Client.BucketExists(ctx, server.Bucket)
+		if err != nil {
+			log.Println(err, "op: mkbucket check")
+			return err
+		}
 
-	if exists {
-		log.Println("We already own bucket:", m.Bucket)
-		return nil
-	}
+		if exists {
+			log.Println("We already own bucket:", server.Bucket)
+			return nil
+		}
 
-	// not exist
-	if err := m.Client.MakeBucket(ctx, m.Bucket, minio.MakeBucketOptions{Region: m.Location, ObjectLocking: false}); err != nil {
-		log.Println(err, "op: mkbucket make")
-		return err
-	}
+		// not exist
+		if err := server.Client.MakeBucket(ctx, server.Bucket, minio.MakeBucketOptions{Region: server.Location, ObjectLocking: false}); err != nil {
+			log.Println(err, "op: mkbucket make")
+			return err
+		}
 
-	log.Println("Successfully created bucket:", m.Bucket)
+		log.Println("server index", index, "Successfully created bucket:", server.Bucket)
+	}
 	return nil
 }
 
@@ -228,26 +234,31 @@ func (m *S3confFS) RemoveAll(ctx context.Context, name string) error {
 	go func() {
 		defer close(objectsCh)
 		// List all objects from a bucket-name with a matching prefix.
-		for object := range m.Client.ListObjects(ctx, m.Bucket, minio.ListObjectsOptions{Prefix: name, Recursive: true}) {
-			if object.Err != nil {
-				log.Println(object.Err, "op: removeAll, name:", name)
+		for index, server := range m.servers {
+			for object := range server.Client.ListObjects(ctx, server.Bucket, minio.ListObjectsOptions{Prefix: name, Recursive: true}) {
+				if object.Err != nil {
+					log.Println("index", index, object.Err, "op: removeAll, name:", name)
+				}
+				objectsCh <- object
 			}
-			objectsCh <- object
 		}
 	}()
+	for index, server := range m.servers {
+		for rErr := range server.Client.RemoveObjects(ctx, server.Bucket, objectsCh, minio.RemoveObjectsOptions{GovernanceBypass: true}) {
+			log.Println("index", index, "Error detected during deletion: ", rErr)
 
-	for rErr := range m.Client.RemoveObjects(ctx, m.Bucket, objectsCh, minio.RemoveObjectsOptions{GovernanceBypass: true}) {
-		log.Println("Error detected during deletion: ", rErr)
-
-		if rErr.Err != nil {
-			return rErr.Err
+			if rErr.Err != nil {
+				return rErr.Err
+			}
+			// deleteCacheIsDir(rErr.ObjectName)
 		}
-
-		// deleteCacheIsDir(rErr.ObjectName)
+		if err := server.Client.RemoveObject(ctx, server.Bucket, name, minio.RemoveObjectOptions{}); err != nil {
+			return err
+		}
+		// deleteCacheIsDir(name)
 	}
 
-	// deleteCacheIsDir(name)
-	return m.Client.RemoveObject(ctx, m.Bucket, name, minio.RemoveObjectOptions{})
+	return nil
 }
 
 func (m *S3confFS) Rename(ctx context.Context, oldName, newName string) error {
