@@ -16,6 +16,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	// "github.com/totoval/framework/helpers/hash"
+	"github.com/klauspost/reedsolomon"
 
 	"golang.org/x/net/webdav"
 )
@@ -221,6 +222,8 @@ func (m *S3confFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 	parityShards := 4
 	readers := make([]io.Reader, parityShards)
 	dataShards := 3
+	opt := reedsolomon.Option(nil)
+	r, err := reedsolomon.NewStream(parityShards, dataShards, opt)
 	// out := make([]io.Writer, dataShards)
 
 	for index, server := range m.servers {
@@ -238,8 +241,17 @@ func (m *S3confFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 
 	// Encode from input to output.
 
-	var b bytes.Buffer
-	err = rs.Encode(readers, &b)
+	b := make([]*bytes.Buffer, dataShards)
+	for i := range b {
+		b[i] = &bytes.Buffer{}
+	}
+
+	out := make([]io.Writer, len(b))
+	for i := range b {
+		out[i] = b[i]
+	}
+
+	err = r.Encode(readers, out)
 
 	if err != nil {
 		log.Fatal(err)
@@ -252,7 +264,11 @@ func (m *S3confFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 
 	defer os.Remove(tmpfile.Name()) // clean up
 
-	tmpfile.ReadFrom(&b)
+	readout := make([]io.Reader, len(b))
+	for i := range b {
+		readout[i] = b[i]
+		tmpfile.ReadFrom(readout[i])
+	}
 
 	// if _, err := tmpfile.Write(content); err != nil {
 	// 	tmpfile.Close()
@@ -266,7 +282,7 @@ func (m *S3confFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 			fmt.Println(err)
 		}
 		fmt.Println("Successfully uploaded bytes: ", n, " index ", index)
-		obj, err = server.Client.GetObject(server.Bucket, "tempfile", minio.GetObjectOptions{})
+		obj, err = server.Client.GetObject(ctx, server.Bucket, "tempfile", minio.GetObjectOptions{})
 		break
 	}
 
