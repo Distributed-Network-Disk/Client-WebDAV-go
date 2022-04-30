@@ -3,7 +3,9 @@ package lib
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -176,13 +178,16 @@ func (m *S3confFS) Mkdir(ctx context.Context, name string, perm os.FileMode) err
 	}
 
 	fileBytes := bytes.NewBuffer([]byte{})
-	uploadInfo, err := m.Client.PutObject(ctx, m.Bucket, strings.TrimPrefix(path.Join(name, KEEP_FILE_NAME), "/"), bytes.NewBuffer([]byte{}), int64(fileBytes.Len()), minio.PutObjectOptions{ContentType: KEEP_FILE_CONTENT_TYPE})
-	if err != nil {
-		log.Println(err, "op: mkdir", "name:", path.Join(name, KEEP_FILE_NAME))
-		return err
+
+	for index, server := range m.servers {
+		uploadInfo, err := server.Client.PutObject(ctx, server.Bucket, strings.TrimPrefix(path.Join(name, KEEP_FILE_NAME), "/"), bytes.NewBuffer([]byte{}), int64(fileBytes.Len()), minio.PutObjectOptions{ContentType: KEEP_FILE_CONTENT_TYPE})
+		if err != nil {
+			log.Println(err, "op: mkdir, index: ", index, " name:", path.Join(name, KEEP_FILE_NAME))
+			return err
+		}
+		log.Println("Successfully uploaded bytes: ", uploadInfo, " at index ", index)
+		log.Println("mkdir success, name:", name)
 	}
-	log.Println("Successfully uploaded bytes: ", uploadInfo)
-	log.Println("mkdir success, name:", name)
 	return nil
 }
 
@@ -210,13 +215,66 @@ func (m *S3confFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 	}
 
 	// file
-	object, err := m.Client.GetObject(ctx, m.Bucket, strings.TrimPrefix(name, "/"), minio.GetObjectOptions{})
-	log.Println("open file, name:", name)
-	if err != nil {
-		return nil, err
+
+	// 从存储节点拿文件返回给用户，parityshards
+	// do decoding
+	parityShards := 4
+	readers := make([]io.Reader, parityShards)
+	dataShards := 3
+	// out := make([]io.Writer, dataShards)
+
+	for index, server := range m.servers {
+		object, err := server.Client.GetObject(ctx, server.Bucket, strings.TrimPrefix(name, "/"), minio.GetObjectOptions{})
+		if err != nil {
+			log.Println("open name: ", name, "at index: ", index, "error")
+		}
+		log.Println("open name: ", name, "success")
+		readers = append(readers, io.Reader(object))
 	}
-	log.Println("open name: ", name, "success")
-	return &file{m, object, name}, nil
+
+	// for i := range out {
+	// 	out[i] = ioutil.Discard
+	// }
+
+	// Encode from input to output.
+
+	var b bytes.Buffer
+	err = rs.Encode(readers, &b)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tmpfile, err := ioutil.TempFile("", "tempfile")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer os.Remove(tmpfile.Name()) // clean up
+
+	tmpfile.ReadFrom(&b)
+
+	// if _, err := tmpfile.Write(content); err != nil {
+	// 	tmpfile.Close()
+	// 	log.Fatal(err)
+	// }
+
+	var obj *minio.Object
+	for index, server := range m.servers {
+		n, err := server.Client.FPutObject(ctx, server.Bucket, "tempfile", "tempfile", minio.PutObjectOptions{})
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println("Successfully uploaded bytes: ", n, " index ", index)
+		obj, err = server.Client.GetObject(server.Bucket, "tempfile", minio.GetObjectOptions{})
+		break
+	}
+
+	// if err := tmpfile.Close(); err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	return &file{m, obj, name}, nil
 }
 
 func (m *S3confFS) RemoveAll(ctx context.Context, name string) error {
